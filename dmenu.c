@@ -27,9 +27,16 @@
 
 /* enums */
 enum { SchemeNorm, SchemeSel, SchemeOut, SchemeLast }; /* color schemes */
+struct item;
+struct itemgroup {
+	struct item *items;
+	size_t imax;
+	size_t size;
+};
 
 struct item {
 	char *text;
+	char *command;
 	struct item *left, *right;
 	int out;
 };
@@ -40,7 +47,8 @@ static int bh, mw, mh;
 static int inputw = 0, promptw;
 static int lrpad; /* sum of left and right padding */
 static size_t cursor;
-static struct item *items = NULL;
+static struct itemgroup rootgroup = { NULL, 0, 0 };
+static struct itemgroup *activegroup = &rootgroup;
 static struct item *matches, *matchend;
 static struct item *prev, *curr, *next, *sel;
 static int mon = -1, screen;
@@ -230,7 +238,7 @@ match(void)
 
 	matches = lprefix = lsubstr = matchend = prefixend = substrend = NULL;
 	textsize = strlen(text) + 1;
-	for (item = items; item && item->text; item++) {
+	for (item = activegroup->items; item && item->text; item++) {
 		for (i = 0; i < tokc; i++)
 			if (!fstrstr(item->text, tokv[i]))
 				break;
@@ -521,30 +529,35 @@ paste(void)
 static void
 readstdin(void)
 {
-	char buf[sizeof text], *p;
-	size_t i, imax = 0, size = 0;
+	char buf[sizeof text], *p, *textptr;
 	unsigned int tmpmax = 0;
+	struct itemgroup *group = &rootgroup;
+	char *textmax = 0;
 
 	/* read each line from stdin and add it to the item list */
-	for (i = 0; fgets(buf, sizeof buf, stdin); i++) {
-		if (i + 1 >= size / sizeof *items)
-			if (!(items = realloc(items, (size += BUFSIZ))))
-				die("cannot realloc %u bytes:", size);
+	while(fgets(buf, sizeof buf, stdin)) {
 		if ((p = strchr(buf, '\n')))
 			*p = '\0';
-		if (!(items[i].text = strdup(buf)))
-			die("cannot strdup %u bytes:", strlen(buf) + 1);
-		items[i].out = 0;
-		drw_font_getexts(drw->fonts, buf, strlen(buf), &tmpmax, NULL);
+
+		if (group->imax + 1 >= group->size / sizeof *group->items)
+			if (!(group->items = realloc(group->items, 
+			                                   (group->size += BUFSIZ))))
+				die("cannot realloc %u bytes:", group->size);
+		if (!(group->items[group->imax].text = strdup(textptr)))
+			die("cannot strdup %u bytes:", strlen(textptr) + 1);
+		group->items[group->imax].command = 0;
+		group->items[group->imax].children = 0;
+		group->items[group->imax].out = 0;
+		drw_font_getexts(drw->fonts, textptr, strlen(textptr), &tmpmax, NULL);
 		if (tmpmax > inputw) {
 			inputw = tmpmax;
-			imax = i;
+			textmax = group->items[group->imax].text;
 		}
+		group->imax++;
+		group->items[group->imax].text = NULL;
 	}
-	if (items)
-		items[i].text = NULL;
-	inputw = items ? TEXTW(items[imax].text) : 0;
-	lines = MIN(lines, i);
+	inputw = textmax ? TEXTW(textmax) : 0;
+	lines = MIN(lines, rootgroup.imax);
 }
 
 static void
