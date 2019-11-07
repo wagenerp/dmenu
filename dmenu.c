@@ -32,11 +32,13 @@ struct itemgroup {
 	struct item *items;
 	size_t imax;
 	size_t size;
+	struct itemgroup *parent;
 };
 
 struct item {
 	char *text;
 	char *command;
+	struct itemgroup *children;
 	struct item *left, *right;
 	int out;
 };
@@ -47,7 +49,7 @@ static int bh, mw, mh;
 static int inputw = 0, promptw;
 static int lrpad; /* sum of left and right padding */
 static size_t cursor;
-static struct itemgroup rootgroup = { NULL, 0, 0 };
+static struct itemgroup rootgroup = { NULL, 0, 0, NULL };
 static struct itemgroup *activegroup = &rootgroup;
 static struct item *matches, *matchend;
 static struct item *prev, *curr, *next, *sel;
@@ -313,6 +315,15 @@ movewordedge(int dir)
 }
 
 static void
+setgroup(struct itemgroup *group)
+{
+	activegroup = group;
+	cursor = 0;
+	text[cursor] = '\0';
+	match();
+}
+
+static void
 keypress(XKeyEvent *ev)
 {
 	char buf[32];
@@ -407,14 +418,26 @@ insert:
 		if (!iscntrl(*buf))
 			insert(buf, len);
 		break;
+	case XK_period:
+		if (sel && sel->children) {
+			setgroup(sel->children);
+			break;
+		}
+		insert(buf, len);
+		break;
 	case XK_Delete:
 		if (text[cursor] == '\0')
 			return;
 		cursor = nextrune(+1);
 		/* fallthrough */
 	case XK_BackSpace:
-		if (cursor == 0)
+		if (cursor == 0) {
+			if (activegroup->parent) {
+				setgroup(activegroup->parent);
+				break;
+			}
 			return;
+		}
 		insert(NULL, nextrune(-1) - cursor);
 		break;
 	case XK_End:
@@ -533,11 +556,45 @@ readstdin(void)
 	unsigned int tmpmax = 0;
 	struct itemgroup *group = &rootgroup;
 	char *textmax = 0;
+	struct item *lastitem = 0;
 
 	/* read each line from stdin and add it to the item list */
 	while(fgets(buf, sizeof buf, stdin)) {
 		if ((p = strchr(buf, '\n')))
 			*p = '\0';
+		if (buf[0] == ':') {
+			/* interpret this line as a command, not a name */
+			if (buf[1] == ':') {
+				/* escaped leading colon */
+				textptr = buf + 1;
+			} else {
+				if (strcasecmp(buf,":push") == 0) {
+					if (!group->items) 
+						die("cannot push with no previous item");
+					if (!group->items[group->imax-1].children) {
+						if (!(group->items[group->imax-1].children=
+						      malloc(sizeof *group->items[group->imax-1].children)))
+							die("cannot alloc subgroup");
+						group->items[group->imax-1].children->parent = group;
+						group = group->items[group->imax-1].children;
+						group->imax = 0;
+						group->items = 0;
+						group->size = 0;
+					}
+
+
+				} else if (strcasecmp(buf,":pop") == 0) {
+					if (!group->parent)
+						die("cannot pop root group");
+					group = group->parent;
+				} else {
+					die("unrecognized command: %s",buf);
+				}
+			}
+			continue;
+		} else {
+			textptr = buf;
+		}
 
 		if (group->imax + 1 >= group->size / sizeof *group->items)
 			if (!(group->items = realloc(group->items, 
