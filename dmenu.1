@@ -30,6 +30,9 @@ is a dynamic menu for X, which reads a list of newline\-separated items from
 stdin.  When the user selects an item and presses Return, their choice is printed
 to stdout and dmenu terminates.  Entering text will narrow the items to those
 matching the tokens in the input.
+Leading a line with a colon (:) indicates a command line. These have special 
+meanings (see COMMANDS) and are not added to the list of strings. To allow text 
+lines to begin with a colon, start the line with a double colon (::).
 .P
 .B dmenu_run
 is a script used by
@@ -189,6 +192,18 @@ Page up
 .TP
 .B M\-l
 Down
+.SH COMMANDS
+.B :push
+Start a new sub group. All following lines are registered under the entry immediately 
+preceeding the :push command. (Note that there must be a text line preceeding this.)
+.TP
+.B :pop
+Terminates a sub group and returns to the parent. This must not be called in the root group.
+.TP
+.B :output <...>
+Change the text to be printed when selecting the entry immediately preceeding the 
+:output command. The new output value is the entire line following ':output ', i.e.
+excluding the trailing space character.
 .SH SEE ALSO
 .IR dwm (1),
 .IR stest (1)
