@@ -564,7 +564,7 @@ readstdin(void)
 	while(fgets(buf, sizeof buf, stdin)) {
 		if ((p = strchr(buf, '\n')))
 			*p = '\0';
-		if (buf[0] == ':') {
+		if (enableCommands && (buf[0] == ':')) {
 			/* interpret this line as a command, not a name */
 			if (buf[1] == ':') {
 				/* escaped leading colon */
@@ -767,7 +767,7 @@ setup(void)
 static void
 usage(void)
 {
-	fputs("usage: dmenu [-bfiv] [-l lines] [-p prompt] [-fn font] [-m monitor]\n"
+	fputs("usage: dmenu [-bcfiv] [-l lines] [-p prompt] [-fn font] [-m monitor]\n"
 	      "             [-nb color] [-nf color] [-sb color] [-sf color] [-w windowid]\n", stderr);
 	exit(1);
 }
@@ -790,6 +790,8 @@ main(int argc, char *argv[])
 		else if (!strcmp(argv[i], "-i")) { /* case-insensitive item matching */
 			fstrncmp = strncasecmp;
 			fstrstr = cistrstr;
+		} else if (!strcmp(argv[i], "-c")) { /* enable commands */
+			enableCommands = 1;
 		} else if (i + 1 == argc)
 			usage();
 		/* these options take one argument */
