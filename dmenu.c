@@ -37,7 +37,7 @@ struct itemgroup {
 
 struct item {
 	char *text;
-	char *command;
+	char *output;
 	struct itemgroup *children;
 	struct item *left, *right;
 	int out;
@@ -495,7 +495,9 @@ insert:
 		break;
 	case XK_Return:
 	case XK_KP_Enter:
-		puts((sel && !(ev->state & ShiftMask)) ? sel->text : text);
+		puts((sel && !(ev->state & ShiftMask)) 
+		     ? (sel->output ? sel->output : sel->text) 
+				 : text);
 		if (!(ev->state & ControlMask)) {
 			cleanup();
 			exit(0);
@@ -587,6 +589,12 @@ readstdin(void)
 					if (!group->parent)
 						die("cannot pop root group");
 					group = group->parent;
+				} else if (strncasecmp(buf,":output ",8)==0) {
+					if (!group->items) 
+						die("cannot set output with no previous item");
+					textptr = buf + 8;
+					if (!(group->items[group->imax-1].output = strdup(textptr)))
+						die("cannot strdup %u bytes:", strlen(textptr) + 1);
 				} else {
 					die("unrecognized command: %s",buf);
 				}
@@ -602,7 +610,7 @@ readstdin(void)
 				die("cannot realloc %u bytes:", group->size);
 		if (!(group->items[group->imax].text = strdup(textptr)))
 			die("cannot strdup %u bytes:", strlen(textptr) + 1);
-		group->items[group->imax].command = 0;
+		group->items[group->imax].output = 0;
 		group->items[group->imax].children = 0;
 		group->items[group->imax].out = 0;
 		drw_font_getexts(drw->fonts, textptr, strlen(textptr), &tmpmax, NULL);
